@@ -1,0 +1,140 @@
+{
+    "corpus_sizes": [
+        10469,
+        50000,
+        100000,
+        250000,
+        500000,
+        1000000
+    ],
+    "projections": {
+        "exact": [
+            {
+                "docs": 10469,
+                "index_rows": 110102,
+                "storage_mb": 13.44
+            },
+            {
+                "docs": 50000,
+                "index_rows": 525848,
+                "storage_mb": 64.19
+            },
+            {
+                "docs": 100000,
+                "index_rows": 1051695,
+                "storage_mb": 128.38
+            },
+            {
+                "docs": 250000,
+                "index_rows": 2629239,
+                "storage_mb": 320.95
+            },
+            {
+                "docs": 500000,
+                "index_rows": 5258477,
+                "storage_mb": 641.9
+            },
+            {
+                "docs": 1000000,
+                "index_rows": 10516955,
+                "storage_mb": 1283.81
+            }
+        ],
+        "ngram": [
+            {
+                "docs": 10469,
+                "index_rows": 879327,
+                "storage_mb": 107.34
+            },
+            {
+                "docs": 50000,
+                "index_rows": 4199670,
+                "storage_mb": 512.66
+            },
+            {
+                "docs": 100000,
+                "index_rows": 8399341,
+                "storage_mb": 1025.31
+            },
+            {
+                "docs": 250000,
+                "index_rows": 20998352,
+                "storage_mb": 2563.28
+            },
+            {
+                "docs": 500000,
+                "index_rows": 41996705,
+                "storage_mb": 5126.55
+            },
+            {
+                "docs": 1000000,
+                "index_rows": 83993409,
+                "storage_mb": 10253.1
+            }
+        ],
+        "lsh_k3": [
+            {
+                "docs": 10469,
+                "index_rows": 330306,
+                "storage_mb": 40.32
+            },
+            {
+                "docs": 50000,
+                "index_rows": 1577543,
+                "storage_mb": 192.57
+            },
+            {
+                "docs": 100000,
+                "index_rows": 3155086,
+                "storage_mb": 385.14
+            },
+            {
+                "docs": 250000,
+                "index_rows": 7887716,
+                "storage_mb": 962.86
+            },
+            {
+                "docs": 500000,
+                "index_rows": 15775432,
+                "storage_mb": 1925.71
+            },
+            {
+                "docs": 1000000,
+                "index_rows": 31550864,
+                "storage_mb": 3851.42
+            }
+        ],
+        "lsh_k5": [
+            {
+                "docs": 10469,
+                "index_rows": 550510,
+                "storage_mb": 67.2
+            },
+            {
+                "docs": 50000,
+                "index_rows": 2629239,
+                "storage_mb": 320.95
+            },
+            {
+                "docs": 100000,
+                "index_rows": 5258477,
+                "storage_mb": 641.9
+            },
+            {
+                "docs": 250000,
+                "index_rows": 13146194,
+                "storage_mb": 1604.76
+            },
+            {
+                "docs": 500000,
+                "index_rows": 26292387,
+                "storage_mb": 3209.52
+            },
+            {
+                "docs": 1000000,
+                "index_rows": 52584774,
+                "storage_mb": 6419.04
+            }
+        ]
+    }
+}

@@ -1,0 +1,310 @@
+{
+    "k_sweep": {
+        "2": {
+            "k": 2,
+            "latency": {
+                "mean": 52.76,
+                "variance": 14243.01,
+                "std_dev": 119.34,
+                "ci_95_lower": 29.08,
+                "ci_95_upper": 76.44,
+                "margin_of_error": 23.68
+            },
+            "candidates": {
+                "mean": 3102.07,
+                "variance": 3779129,
+                "std_dev": 1944,
+                "ci_95_lower": 2716.38,
+                "ci_95_upper": 3487.76,
+                "margin_of_error": 385.69
+            },
+            "classification": {
+                "precision": 0.58,
+                "recall": 76,
+                "f1": 1.14,
+                "fpr": 100
+            }
+        },
+        "3": {
+            "k": 3,
+            "latency": {
+                "mean": 91.66,
+                "variance": 1741.66,
+                "std_dev": 41.73,
+                "ci_95_lower": 83.38,
+                "ci_95_upper": 99.94,
+                "margin_of_error": 8.28
+            },
+            "candidates": {
+                "mean": 4018.16,
+                "variance": 3329144.2,
+                "std_dev": 1824.59,
+                "ci_95_lower": 3656.16,
+                "ci_95_upper": 4380.16,
+                "margin_of_error": 362
+            },
+            "classification": {
+                "precision": 0.55,
+                "recall": 88,
+                "f1": 1.09,
+                "fpr": 100
+            }
+        },
+        "4": {
+            "k": 4,
+            "latency": {
+                "mean": 117.08,
+                "variance": 2302.5,
+                "std_dev": 47.98,
+                "ci_95_lower": 107.56,
+                "ci_95_upper": 126.6,
+                "margin_of_error": 9.52
+            },
+            "candidates": {
+                "mean": 5005.64,
+                "variance": 3666752.19,
+                "std_dev": 1914.88,
+                "ci_95_lower": 4625.73,
+                "ci_95_upper": 5385.55,
+                "margin_of_error": 379.91
+            },
+            "classification": {
+                "precision": 0.55,
+                "recall": 90,
+                "f1": 1.1,
+                "fpr": 100
+            }
+        },
+        "5": {
+            "k": 5,
+            "latency": {
+                "mean": 131.32,
+                "variance": 16063.56,
+                "std_dev": 126.74,
+                "ci_95_lower": 106.18,
+                "ci_95_upper": 156.47,
+                "margin_of_error": 25.15
+            },
+            "candidates": {
+                "mean": 6034.51,
+                "variance": 3036985.08,
+                "std_dev": 1742.69,
+                "ci_95_lower": 5688.76,
+                "ci_95_upper": 6380.26,
+                "margin_of_error": 345.75
+            },
+            "classification": {
+                "precision": 0.55,
+                "recall": 90,
+                "f1": 1.1,
+                "fpr": 100
+            }
+        }
+    },
+    "tau_sweep": {
+        "70": {
+            "tau": 70,
+            "latency": {
+                "mean": 70.74,
+                "variance": 1015.29,
+                "std_dev": 31.86,
+                "ci_95_lower": 64.42,
+                "ci_95_upper": 77.06,
+                "margin_of_error": 6.32
+            },
+            "classification": {
+                "precision": 0.47,
+                "recall": 96,
+                "f1": 0.94,
+                "fpr": 100
+            }
+        },
+        "75": {
+            "tau": 75,
+            "latency": {
+                "mean": 83.36,
+                "variance": 1500.84,
+                "std_dev": 38.74,
+                "ci_95_lower": 75.67,
+                "ci_95_upper": 91.05,
+                "margin_of_error": 7.69
+            },
+            "classification": {
+                "precision": 0.52,
+                "recall": 96,
+                "f1": 1.04,
+                "fpr": 100
+            }
+        },
+        "80": {
+            "tau": 80,
+            "latency": {
+                "mean": 50.54,
+                "variance": 15359.97,
+                "std_dev": 123.94,
+                "ci_95_lower": 25.95,
+                "ci_95_upper": 75.13,
+                "margin_of_error": 24.59
+            },
+            "classification": {
+                "precision": 0.55,
+                "recall": 96,
+                "f1": 1.08,
+                "fpr": 100
+            }
+        },
+        "85": {
+            "tau": 85,
+            "latency": {
+                "mean": 60.66,
+                "variance": 664.35,
+                "std_dev": 25.77,
+                "ci_95_lower": 55.55,
+                "ci_95_upper": 65.78,
+                "margin_of_error": 5.11
+            },
+            "classification": {
+                "precision": 0.55,
+                "recall": 88,
+                "f1": 1.09,
+                "fpr": 100
+            }
+        },
+        "90": {
+            "tau": 90,
+            "latency": {
+                "mean": 61.95,
+                "variance": 740.17,
+                "std_dev": 27.21,
+                "ci_95_lower": 56.55,
+                "ci_95_upper": 67.34,
+                "margin_of_error": 5.4
+            },
+            "classification": {
+                "precision": 0.64,
+                "recall": 59,
+                "f1": 1.26,
+                "fpr": 100
+            }
+        },
+        "95": {
+            "tau": 95,
+            "latency": {
+                "mean": 62.09,
+                "variance": 727.15,
+                "std_dev": 26.97,
+                "ci_95_lower": 56.74,
+                "ci_95_upper": 67.44,
+                "margin_of_error": 5.35
+            },
+            "classification": {
+                "precision": 0.37,
+                "recall": 17,
+                "f1": 0.73,
+                "fpr": 100
+            }
+        }
+    },
+    "theta_sweep": {
+        "0.3": {
+            "theta": 0.3,
+            "latency": {
+                "mean": 226.54,
+                "variance": 17598.19,
+                "std_dev": 132.66,
+                "ci_95_lower": 200.22,
+                "ci_95_upper": 252.86,
+                "margin_of_error": 26.32
+            },
+            "candidates": {
+                "mean": 6069.43,
+                "variance": 1543833.78,
+                "std_dev": 1242.51,
+                "ci_95_lower": 5822.92,
+                "ci_95_upper": 6315.94,
+                "margin_of_error": 246.51
+            },
+            "classification": {
+                "precision": 0.56,
+                "recall": 91,
+                "f1": 1.11,
+                "fpr": 100
+            }
+        },
+        "0.4": {
+            "theta": 0.4,
+            "latency": {
+                "mean": 250.28,
+                "variance": 9989.41,
+                "std_dev": 99.95,
+                "ci_95_lower": 230.45,
+                "ci_95_upper": 270.11,
+                "margin_of_error": 19.83
+            },
+            "candidates": {
+                "mean": 4970.43,
+                "variance": 1662403.74,
+                "std_dev": 1289.34,
+                "ci_95_lower": 4714.62,
+                "ci_95_upper": 5226.24,
+                "margin_of_error": 255.81
+            },
+            "classification": {
+                "precision": 0.56,
+                "recall": 91,
+                "f1": 1.11,
+                "fpr": 100
+            }
+        },
+        "0.5": {
+            "theta": 0.5,
+            "latency": {
+                "mean": 221.8,
+                "variance": 44295.27,
+                "std_dev": 210.46,
+                "ci_95_lower": 180.04,
+                "ci_95_upper": 263.56,
+                "margin_of_error": 41.76
+            },
+            "candidates": {
+                "mean": 4123.02,
+                "variance": 1534834.5,
+                "std_dev": 1238.88,
+                "ci_95_lower": 3877.23,
+                "ci_95_upper": 4368.81,
+                "margin_of_error": 245.79
+            },
+            "classification": {
+                "precision": 0.56,
+                "recall": 91,
+                "f1": 1.11,
+                "fpr": 100
+            }
+        },
+        "0.6": {
+            "theta": 0.6,
+            "latency": {
+                "mean": 231.7,
+                "variance": 4426.4,
+                "std_dev": 66.53,
+                "ci_95_lower": 218.5,
+                "ci_95_upper": 244.9,
+                "margin_of_error": 13.2
+            },
+            "candidates": {
+                "mean": 3153.29,
+                "variance": 1431966.87,
+                "std_dev": 1196.65,
+                "ci_95_lower": 2915.88,
+                "ci_95_upper": 3390.7,
+                "margin_of_error": 237.41
+            },
+            "classification": {
+                "precision": 0.56,
+                "recall": 91,
+                "f1": 1.11,
+                "fpr": 100
+            }
+        }
+    }
+}
