@@ -17,31 +17,49 @@ use Fkse\Benchmark\SensitivityBenchmark;
 ini_set('memory_limit', '1024M');
 set_time_limit(0);
 
+// Usage:
+//   php scripts/run_benchmark.php                            new query set, writes to data/
+//   php scripts/run_benchmark.php --queries=data/benchmark_100_queries.json --out=data/rerun_X
+//       reuses the published 100 test queries (TypoInjector uses unseeded rand(), so only
+//       --queries reproduces them) and writes the new results to another folder.
+$opts = getopt('', ['queries:', 'out:']);
+$root = dirname(__DIR__);
+$resolve = static fn (string $p): string =>
+    (str_starts_with($p, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $p) === 1) ? $p : $root . '/' . $p;
+
 echo "===============================================================\n";
 echo "       FKSE EXPERIMENTAL BENCHMARK & SENSITIVITY SWEEPS        \n";
 echo "===============================================================\n";
 
-$dataDir = __DIR__ . '/../data';
+$dataDir = isset($opts['out']) ? $resolve((string) $opts['out']) : $root . '/data';
 if (!is_dir($dataDir)) {
     mkdir($dataDir, 0777, true);
 }
+echo "Timer: hrtime() (monotonic). Output folder: {$dataDir}\n";
 
 $benchmark = new SensitivityBenchmark();
 
-// 1. Generate 100 balanced clinical test cases
-echo "[1/4] Generating 100 standardized typo-injected clinical queries...\n";
-$testCases = $benchmark->generateQuerySet(100);
-echo "Generated " . count($testCases) . " test queries across 4 typo categories.\n";
+// 1. Query set: reuse a previous run, or generate 100 balanced clinical test cases
+if (isset($opts['queries'])) {
+    $src = $resolve((string) $opts['queries']);
+    $prev = json_decode((string) file_get_contents($src), true, 512, JSON_THROW_ON_ERROR);
+    $testCases = $prev['test_cases'] ?? $prev;
+    echo "[1/4] Reusing " . count($testCases) . " test queries from {$src}\n";
+} else {
+    echo "[1/4] Generating 100 standardized typo-injected clinical queries...\n";
+    $testCases = $benchmark->generateQuerySet(100);
+    echo "Generated " . count($testCases) . " test queries across 4 typo categories.\n";
+}
 
 // 2. Execute 100-query benchmark
 echo "[2/4] Executing primary 100-query comparative evaluation (Exact vs N-Gram vs LSH)...\n";
-$tStart = microtime(true);
+$tStart = hrtime(true);
 $results100 = $benchmark->execute100QueryBenchmark($testCases);
-$elapsed100 = round(microtime(true) - $tStart, 2);
-echo "Completed 100 queries in {$elapsed100} seconds.\n";
+$elapsed100 = round((hrtime(true) - $tStart) / 1e9, 2);
+echo "Completed " . count($testCases) . " queries in {$elapsed100} seconds.\n";
 
 // Display summary table
-echo "\n--- Summary Performance (n = 100 queries) ---\n";
+echo "\n--- Summary Performance (n = " . count($testCases) . " queries) ---\n";
 printf("%-15s | %-10s | %-10s | %-10s | %-12s | %-18s\n", "Scheme", "Recall (%)", "Prec (%)", "F1 (%)", "FPR (%)", "Latency Mean (ms)");
 echo str_repeat('-', 85) . "\n";
 foreach (['exact', 'ngram', 'lsh'] as $s) {
@@ -52,7 +70,7 @@ foreach (['exact', 'ngram', 'lsh'] as $s) {
 }
 echo str_repeat('-', 85) . "\n";
 $tTest = $results100['summary']['paired_t_test_ngram_vs_lsh'];
-echo "Paired t-test (N-Gram vs LSH): t = {$tTest['t_statistic']}, df = {$tTest['df']}, p = {$tTest['p_value']} (p < 0.001)\n\n";
+echo "Paired t-test (N-Gram vs LSH): t = {$tTest['t_statistic']}, df = {$tTest['df']}, p = {$tTest['p_value']}\n\n";
 
 // Save primary results
 file_put_contents($dataDir . '/benchmark_100_queries.json', json_encode($results100, JSON_PRETTY_PRINT));
@@ -60,9 +78,9 @@ echo "[PASS] Saved benchmark_100_queries.json\n";
 
 // 3. Execute sensitivity sweeps
 echo "\n[3/4] Executing Sensitivity Sweeps (k in {2,3,4,5}, tau in {70%-95%}, theta in {0.3-0.6})...\n";
-$tSweepStart = microtime(true);
+$tSweepStart = hrtime(true);
 $sweeps = $benchmark->executeSensitivitySweeps($testCases);
-$elapsedSweeps = round(microtime(true) - $tSweepStart, 2);
+$elapsedSweeps = round((hrtime(true) - $tSweepStart) / 1e9, 2);
 echo "Completed sensitivity sweeps in {$elapsedSweeps} seconds.\n";
 
 file_put_contents($dataDir . '/sensitivity_analysis.json', json_encode($sweeps, JSON_PRETTY_PRINT));

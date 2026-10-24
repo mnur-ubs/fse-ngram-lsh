@@ -214,6 +214,24 @@ final class SensitivityBenchmark
     }
 
     /**
+     * Number of negatives over a query set, for FPR = FP / (FP + TN).
+     *
+     * Each query has one target record; every other record in the corpus is a negative, whether
+     * or not the server returned it as a candidate. So FP + TN = queries * (corpus size - 1),
+     * and TN = that total - FP. (The previous estimate, queries * 10, was smaller than FP and
+     * produced a negative TN.)
+     */
+    private function countNegatives(int $queryCount): int
+    {
+        $corpus = (int) $this->pdo->query("SELECT COUNT(*) FROM icds_encrypted")->fetchColumn();
+        if ($corpus < 2) {
+            throw new \RuntimeException("icds_encrypted holds {$corpus} records; cannot compute FPR");
+        }
+
+        return $queryCount * ($corpus - 1);
+    }
+
+    /**
      * Executes the primary 100-query benchmark across Exact Match, N-Gram, and LSH.
      *
      * @param list<array> $testCases
@@ -277,13 +295,14 @@ final class SensitivityBenchmark
         }
 
         // Compute summary statistics
+        $negatives = $this->countNegatives(count($testCases));
         $summary = [];
         foreach (['exact', 'ngram', 'lsh'] as $scheme) {
             $classMetrics = MetricsCalculator::computeClassificationMetrics(
                 $results[$scheme]['tp'],
                 $results[$scheme]['fp'],
                 $results[$scheme]['fn'],
-                count($testCases) * 10 - $results[$scheme]['fp'] // Estimated True Negatives in candidate pool
+                $negatives - $results[$scheme]['fp']
             );
             $distLatency = MetricsCalculator::computeDistribution($results[$scheme]['latency']);
             $distCandidates = MetricsCalculator::computeDistribution($results[$scheme]['retrieved_count']);
@@ -378,6 +397,7 @@ final class SensitivityBenchmark
         $kValues   = [2, 3, 4, 5];
         $tauValues = [70.0, 75.0, 80.0, 85.0, 90.0, 95.0];
         $thetaVals = [0.30, 0.40, 0.50, 0.60];
+        $negatives = $this->countNegatives(count($testCases));
 
         // Pre-fetch candidate sets for each test case
         // 1. k sweep: Query MySQL for k in 2, 3, 4, 5
@@ -405,7 +425,7 @@ final class SensitivityBenchmark
                 'k'             => $k,
                 'latency'       => MetricsCalculator::computeDistribution($latencies),
                 'candidates'    => MetricsCalculator::computeDistribution($cands),
-                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn),
+                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn, $negatives - $fp),
             ];
         }
 
@@ -417,9 +437,9 @@ final class SensitivityBenchmark
 
             foreach ($testCases as $idx => $case) {
                 $rawDocIds = $kCandidateCache[$idx] ?? [];
-                $t0 = microtime(true);
+                $t0 = (hrtime(true) / 1e9);
                 $filterRes = $this->filterCandidates($rawDocIds, $case['typo_query'], $tau, $case['doc_id']);
-                $latency = (microtime(true) - $t0) * 1000;
+                $latency = ((hrtime(true) / 1e9) - $t0) * 1000;
                 $latencies[] = $latency;
 
                 $isRecalled = in_array($case['doc_id'], $filterRes['valid_doc_ids'], true);
@@ -430,7 +450,7 @@ final class SensitivityBenchmark
             $tauSweep[(string) $tau] = [
                 'tau'           => $tau,
                 'latency'       => MetricsCalculator::computeDistribution($latencies),
-                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn),
+                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn, $negatives - $fp),
             ];
         }
 
@@ -453,7 +473,7 @@ final class SensitivityBenchmark
                 'theta'         => $th,
                 'latency'       => MetricsCalculator::computeDistribution($latencies),
                 'candidates'    => MetricsCalculator::computeDistribution($cands),
-                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn),
+                'classification'=> MetricsCalculator::computeClassificationMetrics($tp, $fp, $fn, $negatives - $fp),
             ];
         }
 
@@ -466,21 +486,45 @@ final class SensitivityBenchmark
 
     // --- Search Implementations ---
 
+    /**
+     * Stops the run if a measured duration is negative. hrtime() is monotonic, so this can only
+     * happen if the timer is changed back to a wall clock; failing loudly keeps such values out
+     * of the published data (see README, "Known data-quality issue").
+     *
+     * @param array<string, mixed> $result
+     */
+    private static function assertNonNegativeLatency(array $result, string $scheme, string $query): array
+    {
+        foreach (['latency_trapdoor', 'latency_cloud', 'latency_filter', 'latency_total'] as $field) {
+            if ((float) $result[$field] < 0.0) {
+                throw new \RuntimeException(sprintf(
+                    'Negative latency %s = %.3f ms for %s query "%s". The timer is not monotonic.',
+                    $field,
+                    (float) $result[$field],
+                    $scheme,
+                    $query
+                ));
+            }
+        }
+
+        return $result;
+    }
+
     private function searchExact(string $query, string $targetDocId): array
     {
-        $t0 = microtime(true);
+        $t0 = (hrtime(true) / 1e9);
         $trapdoor = HmacTrapdoor::generate($query, $this->secretKey);
-        $t1 = microtime(true);
+        $t1 = (hrtime(true) / 1e9);
 
         $stmt = $this->pdo->prepare("SELECT DISTINCT doc_id FROM exact_index WHERE trapdoor = ?");
         $stmt->execute([$trapdoor]);
         $rawDocIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $t2 = microtime(true);
+        $t2 = (hrtime(true) / 1e9);
 
         $filterRes = $this->filterCandidates($rawDocIds, $query, 85.0, $targetDocId);
-        $t3 = microtime(true);
+        $t3 = (hrtime(true) / 1e9);
 
-        return [
+        return self::assertNonNegativeLatency([
             'latency_trapdoor' => round(($t1 - $t0) * 1000, 3),
             'latency_cloud'    => round(($t2 - $t1) * 1000, 3),
             'latency_filter'   => round(($t3 - $t2) * 1000, 3),
@@ -489,15 +533,15 @@ final class SensitivityBenchmark
             'filtered_count'   => count($filterRes['valid_doc_ids']),
             'is_recalled'      => in_array($targetDocId, $filterRes['valid_doc_ids'], true),
             'fp_count'         => $filterRes['fp_count'],
-        ];
+        ], 'exact', $query);
     }
 
     private function searchNgram(string $query, string $targetDocId, float $hitRatio, float $tau): array
     {
-        $t0 = microtime(true);
+        $t0 = (hrtime(true) / 1e9);
         $bigrams = NgramTokenizer::extractBigrams($query);
         $trapdoors = array_map(fn($bg) => HmacTrapdoor::generate($bg, $this->secretKey), $bigrams);
-        $t1 = microtime(true);
+        $t1 = (hrtime(true) / 1e9);
 
         $rawDocIds = [];
         if (!empty($trapdoors)) {
@@ -512,12 +556,12 @@ final class SensitivityBenchmark
                 }
             }
         }
-        $t2 = microtime(true);
+        $t2 = (hrtime(true) / 1e9);
 
         $filterRes = $this->filterCandidates($rawDocIds, $query, $tau, $targetDocId);
-        $t3 = microtime(true);
+        $t3 = (hrtime(true) / 1e9);
 
-        return [
+        return self::assertNonNegativeLatency([
             'latency_trapdoor' => round(($t1 - $t0) * 1000, 3),
             'latency_cloud'    => round(($t2 - $t1) * 1000, 3),
             'latency_filter'   => round(($t3 - $t2) * 1000, 3),
@@ -526,15 +570,15 @@ final class SensitivityBenchmark
             'filtered_count'   => count($filterRes['valid_doc_ids']),
             'is_recalled'      => in_array($targetDocId, $filterRes['valid_doc_ids'], true),
             'fp_count'         => $filterRes['fp_count'],
-        ];
+        ], 'ngram', $query);
     }
 
     private function searchLsh(string $query, string $targetDocId, int $k, float $tau): array
     {
-        $t0 = microtime(true);
+        $t0 = (hrtime(true) / 1e9);
         $bandTokens = MinHashEngine::getBandTokens($query, $k);
         $trapdoors = array_map(fn($token) => HmacTrapdoor::generate($token, $this->secretKey), $bandTokens);
-        $t1 = microtime(true);
+        $t1 = (hrtime(true) / 1e9);
 
         $rawDocIds = [];
         if (!empty($trapdoors)) {
@@ -544,12 +588,12 @@ final class SensitivityBenchmark
             $stmt->execute($trapdoors);
             $rawDocIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
         }
-        $t2 = microtime(true);
+        $t2 = (hrtime(true) / 1e9);
 
         $filterRes = $this->filterCandidates($rawDocIds, $query, $tau, $targetDocId);
-        $t3 = microtime(true);
+        $t3 = (hrtime(true) / 1e9);
 
-        return [
+        return self::assertNonNegativeLatency([
             'latency_trapdoor' => round(($t1 - $t0) * 1000, 3),
             'latency_cloud'    => round(($t2 - $t1) * 1000, 3),
             'latency_filter'   => round(($t3 - $t2) * 1000, 3),
@@ -559,7 +603,7 @@ final class SensitivityBenchmark
             'is_recalled'      => in_array($targetDocId, $filterRes['valid_doc_ids'], true),
             'fp_count'         => $filterRes['fp_count'],
             'raw_doc_ids'      => $rawDocIds,
-        ];
+        ], 'lsh', $query);
     }
 
     private function filterCandidates(array $docIds, string $query, float $threshold, string $targetDocId): array

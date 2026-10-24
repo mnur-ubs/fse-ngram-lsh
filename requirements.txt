@@ -1,0 +1,4 @@
+# Python dependencies for scripts/plot_results.py and scripts/verify_results.py
+# Tested 2026-10-13 on Python 3.10 and 3.12 with matplotlib 3.8.4, 3.10.9, 3.11.2.
+matplotlib>=3.6
+numpy>=1.23

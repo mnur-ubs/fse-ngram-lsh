@@ -73,7 +73,7 @@ $headerStyleLsh = [
 ];
 
 // =============================================================================
-// SHEET 1: HASIL PENGUJIAN 100 SAMPEL (TABLE 7, TABLE 8, & FIGURE 5, 6)
+// SHEET 1: HASIL PENGUJIAN 100 SAMPEL (TABLE 7, TABLE 8, FIGURE 6, FIGURE 7 - numbering of manuscript v3)
 // =============================================================================
 $sheet1 = $spreadsheet->getActiveSheet();
 $sheet1->setTitle('Pengujian_100_Sampel');
@@ -94,6 +94,9 @@ $sheet1->getStyle('L1:P1')->applyFromArray($headerStyleNgram);
 $sheet1->mergeCells('Q1:U1');
 $sheet1->setCellValue('Q1', '3. LSH (MINHASH k = 3, FILTER tau = 85%)');
 $sheet1->getStyle('Q1:U1')->applyFromArray($headerStyleLsh);
+
+$sheet1->setCellValue('V1', 'UJI BERPASANGAN');
+$sheet1->getStyle('V1')->applyFromArray($headerStylePrimary);
 
 $sheet1->getRowDimension(1)->setRowHeight(24);
 
@@ -126,6 +129,9 @@ $subHeaders = [
     'S2' => 'Kandidat Server',
     'T2' => 'Lolos Filter',
     'U2' => 'False Positive',
+
+    // Paired difference used by the paired t-test (Table 7)
+    'V2' => 'Selisih N-Gram - LSH (ms)',
 ];
 
 foreach ($subHeaders as $cell => $title) {
@@ -135,6 +141,7 @@ $sheet1->getStyle('A2:F2')->applyFromArray($headerStylePrimary);
 $sheet1->getStyle('G2:K2')->applyFromArray($headerStyleExact);
 $sheet1->getStyle('L2:P2')->applyFromArray($headerStyleNgram);
 $sheet1->getStyle('Q2:U2')->applyFromArray($headerStyleLsh);
+$sheet1->getStyle('V2')->applyFromArray($headerStylePrimary);
 $sheet1->getRowDimension(2)->setRowHeight(28);
 
 // Populate 100 query rows (Rows 3 to 102)
@@ -178,13 +185,30 @@ for ($i = 0; $i < count($testCases); $i++) {
     $sheet1->setCellValue("T{$rowNum}", $detLs['filtered_count']);
     $sheet1->setCellValue("U{$rowNum}", $detLs['fp_count']);
 
+    // Paired difference d_i = latency_N-Gram - latency_LSH
+    $sheet1->setCellValue("V{$rowNum}", "=L{$rowNum}-Q{$rowNum}");
+
     $rowNum++;
 }
 
 $lastDataRow = $rowNum - 1; // 102
 
 // Data range styling
-$sheet1->getStyle("A3:U{$lastDataRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+$sheet1->getStyle("A3:V{$lastDataRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+$sheet1->getStyle("V3:V{$lastDataRow}")->getNumberFormat()->setFormatCode('0.00');
+
+// Data-quality flag: a latency can never be negative. Negative values in the raw data come
+// from the wall-clock timer (microtime) stepping backwards during the run; they are kept
+// as recorded (no silent editing) but highlighted so every reader can see them.
+foreach (['G', 'L', 'Q'] as $col) {
+    for ($rr = 3; $rr <= $lastDataRow; $rr++) {
+        $v = $sheet1->getCell("{$col}{$rr}")->getValue();
+        if (is_numeric($v) && (float) $v < 0) {
+            $sheet1->getStyle("{$col}{$rr}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FF9999');
+            $sheet1->getStyle("{$col}{$rr}")->getFont()->setBold(true);
+        }
+    }
+}
 $sheet1->getStyle("A3:B{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 $sheet1->getStyle("E3:E{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -259,11 +283,11 @@ $r++;
 
 // 5. Margin of Error
 $rowMargin = $r;
-$sheet1->setCellValue("E{$r}", "Margin of Error (95% CI, t=1.984)");
-$sheet1->setCellValue("G{$r}", "=1.984*(G{$rowStd}/SQRT(G{$rowN}))");
-$sheet1->setCellValue("L{$r}", "=1.984*(L{$rowStd}/SQRT(L{$rowN}))");
-$sheet1->setCellValue("Q{$r}", "=1.984*(Q{$rowStd}/SQRT(Q{$rowN}))");
-$sheet1->setCellValue("T{$r}", "t_crit * (s / √n) dengan df=99, tingkat signifikansi α=0.05");
+$sheet1->setCellValue("E{$r}", "Margin of Error (95% CI) = nilai ± di Table 8");
+$sheet1->setCellValue("G{$r}", "=ROUND(T.INV.2T(0.05,G{$rowN}-1),3)*(G{$rowStd}/SQRT(G{$rowN}))");
+$sheet1->setCellValue("L{$r}", "=ROUND(T.INV.2T(0.05,L{$rowN}-1),3)*(L{$rowStd}/SQRT(L{$rowN}))");
+$sheet1->setCellValue("Q{$r}", "=ROUND(T.INV.2T(0.05,Q{$rowN}-1),3)*(Q{$rowStd}/SQRT(Q{$rowN}))");
+$sheet1->setCellValue("T{$r}", "t_crit * (s / √n); t_crit = T.INV.2T(0.05; n-1) dibulatkan 3 desimal = 1.984 (df = 99, α = 0.05), sama dengan t_crit yang tercetak di Table 7");
 $r++;
 
 // 6. CI Lower Bound
@@ -301,9 +325,10 @@ $sheet1->setCellValue("T{$r}", "Derajat kebebasan pengujian berpasangan (paired 
 $r++;
 
 // 11. t-statistic
+$rowTstat = $r;
 $sheet1->setCellValue("E{$r}", "t-statistic (t_calc)");
-$sheet1->setCellValue("L{$r}", "=13.418"); // Computed Paired T-Test Statistic
-$sheet1->setCellValue("T{$r}", "Nilai t terhitung berpasangan (substansial melebihi t_crit = 1.984)");
+$sheet1->setCellValue("L{$r}", "=AVERAGE(V3:V{$lastDataRow})/(STDEV.S(V3:V{$lastDataRow})/SQRT(COUNT(V3:V{$lastDataRow})))");
+$sheet1->setCellValue("T{$r}", "t = rata-rata selisih / (SD selisih / √n), dihitung dari kolom V (bukan angka ketikan)");
 $r++;
 
 // 12. P-Value
@@ -320,9 +345,44 @@ $sheet1->setCellValue("T{$r}", 'Keunggulan latensi LSH terbukti signifikan secar
 $sheet1->getStyle("L{$r}")->getFont()->setBold(true)->getColor()->setRGB('C00000');
 $r++;
 
+// 14. Critical t value
+$rowTcrit = $r;
+$sheet1->setCellValue("E{$r}", "t kritis (two-tailed, α = 0.05)");
+$sheet1->setCellValue("L{$r}", "=T.INV.2T(0.05,L{$rowN}-1)");
+$sheet1->setCellValue("T{$r}", "Nilai t_crit di Table 7 naskah (1.984)");
+$sheet1->getStyle("L{$r}")->getNumberFormat()->setFormatCode('0.000');
+$r++;
+
+// 15-17. Evidence of the "mean ± x" strings printed in the manuscript
+$rowPm8 = $r;
+$sheet1->setCellValue("E{$r}", "Teks Table 8 naskah: Latensi (Mean ± Margin of Error 95%)");
+$sheet1->setCellValue("G{$r}", "=TEXT(G{$rowMean},\"0.00\")&\" ± \"&TEXT(G{$rowMargin},\"0.00\")");
+$sheet1->setCellValue("L{$r}", "=TEXT(L{$rowMean},\"0.00\")&\" ± \"&TEXT(L{$rowMargin},\"0.00\")");
+$sheet1->setCellValue("Q{$r}", "=TEXT(Q{$rowMean},\"0.00\")&\" ± \"&TEXT(Q{$rowMargin},\"0.00\")");
+$sheet1->setCellValue("T{$r}", "Angka sesudah ± di Table 8 adalah MARGIN OF ERROR CI 95% (= t_crit·s/√n), bukan standar deviasi. Contoh LSH: 1.984 × 125.09 / √100 = 24.82");
+$r++;
+
+$sheet1->setCellValue("E{$r}", "Pembanding: Mean ± Standar Deviasi (s)");
+$sheet1->setCellValue("G{$r}", "=TEXT(G{$rowMean},\"0.00\")&\" ± \"&TEXT(G{$rowStd},\"0.00\")");
+$sheet1->setCellValue("L{$r}", "=TEXT(L{$rowMean},\"0.00\")&\" ± \"&TEXT(L{$rowStd},\"0.00\")");
+$sheet1->setCellValue("Q{$r}", "=TEXT(Q{$rowMean},\"0.00\")&\" ± \"&TEXT(Q{$rowStd},\"0.00\")");
+$sheet1->setCellValue("T{$r}", "Bukan format yang dipakai di Table 8; ditampilkan agar perbedaan SD vs margin of error jelas (SD ada di Table 7)");
+$r++;
+
+$rowNeg = $r;
+$sheet1->setCellValue("E{$r}", "Kontrol kualitas: jumlah latensi negatif");
+$sheet1->setCellValue("G{$r}", "=COUNTIF(G3:G{$lastDataRow},\"<0\")");
+$sheet1->setCellValue("L{$r}", "=COUNTIF(L3:L{$lastDataRow},\"<0\")");
+$sheet1->setCellValue("Q{$r}", "=COUNTIF(Q3:Q{$lastDataRow},\"<0\")");
+$sheet1->setCellValue("T{$r}", "Latensi tidak mungkin negatif. Nilai negatif (sel merah) berasal dari timer microtime() yang mundur saat run; dibiarkan apa adanya, bukan diedit");
+$sheet1->getStyle("G{$r}:Q{$r}")->getNumberFormat()->setFormatCode('0');
+$sheet1->getStyle("E{$r}:T{$r}")->getFont()->getColor()->setRGB('C00000');
+$r++;
+
 $sheet1->getStyle("E{$t7HeaderRow}:U" . ($r - 1))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 $sheet1->getStyle("G{$rowMean}:Q" . ($rowPval - 1))->getNumberFormat()->setFormatCode('0.00');
-$sheet1->getStyle("L{$rowPval}")->getNumberFormat()->setFormatCode('0.0000000000');
+$sheet1->getStyle("L{$rowPval}")->getNumberFormat()->setFormatCode('0.00E+00');
+$sheet1->getStyle("L" . ($rowPval - 1))->getNumberFormat()->setFormatCode('0.000');
 
 // -----------------------------------------------------------------------------
 // TABLE B: METRIK KLASIFIKASI & RETRIEVAL (TABLE 8 & FIGURE 6 DI NASKAH)
@@ -331,7 +391,7 @@ $r += 2;
 $t8Start = $r;
 
 $sheet1->mergeCells("E{$t8Start}:U{$t8Start}");
-$sheet1->setCellValue("E{$t8Start}", "TABLE 8 & FIGURE 6. RINGKASAN METRIK KLASIFIKASI & RETRIEVAL PASCA CLIENT FILTERING (tau = 85%)");
+$sheet1->setCellValue("E{$t8Start}", "TABLE 8 & FIGURE 7. RINGKASAN METRIK KLASIFIKASI & RETRIEVAL PASCA CLIENT FILTERING (tau = 85%)");
 $sheet1->getStyle("E{$t8Start}:U{$t8Start}")->applyFromArray($headerStylePrimary);
 $sheet1->getStyle("E{$t8Start}")->getFont()->setSize(11);
 
@@ -404,24 +464,24 @@ $r++;
 
 // Row 7: False Positive Rate (FPR) (%)
 $sheet1->setCellValue("E{$r}", "False Positive Rate (FPR) (%)");
-$sheet1->setCellValue("G{$r}", "=G{$rowFp}/1000");
-$sheet1->setCellValue("L{$r}", "=L{$rowFp}/1000");
-$sheet1->setCellValue("Q{$r}", "=Q{$rowFp}/1000");
-$sheet1->setCellValue("T{$r}", "Rasio kebocoran non-target per 1.000 kandidat uji (FP / 100.000 * 100%)");
+$sheet1->setCellValue("G{$r}", "=G{$rowFp}/(100*(10469-1))*100");
+$sheet1->setCellValue("L{$r}", "=L{$rowFp}/(100*(10469-1))*100");
+$sheet1->setCellValue("Q{$r}", "=Q{$rowFp}/(100*(10469-1))*100");
+$sheet1->setCellValue("T{$r}", "FP / (FP + TN) * 100%. Tiap kueri punya 1 target; 10.468 record lain = negatif, jadi FP + TN = 100 kueri x 10.468 = 1.046.800 (perbaikan 2026-10-18; versi lama membagi FP dengan 1.000)");
 $r++;
 
-// Row 8: Server Candidate Average (Pre-Filter, Fig. 6)
+// Row 8: Server Candidate Average (Pre-Filter, Fig. 7)
 $rowCandAvg = $r;
-$sheet1->setCellValue("E{$r}", "Rata-rata Kandidat Cloud Server (Pre-Filter, Fig. 6)");
+$sheet1->setCellValue("E{$r}", "Rata-rata Kandidat Cloud Server (Pre-Filter, Fig. 7)");
 $sheet1->setCellValue("G{$r}", "=AVERAGE(I3:I{$lastDataRow})");
 $sheet1->setCellValue("L{$r}", "=AVERAGE(N3:N{$lastDataRow})");
 $sheet1->setCellValue("Q{$r}", "=AVERAGE(S3:S{$lastDataRow})");
 $sheet1->setCellValue("T{$r}", "Rata-rata jumlah dokumen ciphertext yang ditarik dari Cloud Server per kueri");
 $r++;
 
-// Row 9: Client Retained Average (Post-Filter, Fig. 6)
+// Row 9: Client Retained Average (Post-Filter, Fig. 7)
 $rowRetAvg = $r;
-$sheet1->setCellValue("E{$r}", "Rata-rata Dokumen Lolos Klien (Post-Filter, Fig. 6)");
+$sheet1->setCellValue("E{$r}", "Rata-rata Dokumen Lolos Klien (Post-Filter, Fig. 7)");
 $sheet1->setCellValue("G{$r}", "=AVERAGE(J3:J{$lastDataRow})");
 $sheet1->setCellValue("L{$r}", "=AVERAGE(O3:O{$lastDataRow})");
 $sheet1->setCellValue("Q{$r}", "=AVERAGE(T3:T{$lastDataRow})");
@@ -441,7 +501,7 @@ $sheet1->getStyle("G{$rowTp}:Q" . ($rowFp))->getNumberFormat()->setFormatCode('#
 $sheet1->getStyle("G{$rowRecall}:Q" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
 
 // Column widths
-foreach (range('A', 'U') as $col) {
+foreach (range('A', 'V') as $col) {
     $sheet1->getColumnDimension($col)->setAutoSize(true);
 }
 
@@ -452,11 +512,11 @@ if (!empty($sens)) {
     $sheet2 = $spreadsheet->createSheet();
     $sheet2->setTitle('Analisis_Sensitivitas');
 
-    $sheet2->setCellValue('A1', 'FIGURE 7. ANALISIS SENSITIVITAS MULTI-PARAMETER ALGORITMA (k, tau, theta)');
+    $sheet2->setCellValue('A1', 'FIGURE 8. ANALISIS SENSITIVITAS MULTI-PARAMETER ALGORITMA (k, tau, theta)');
     $sheet2->getStyle('A1')->getFont()->setBold(true)->setSize(12);
 
     // Section 1: k sweep
-    $sheet2->setCellValue('A3', '1. PENGARUH DIMENSI MINHASH (k) TERHADAP RECALL, LATENSI, DAN KANDIDAT (tau = 85%) [Fig. 7a]');
+    $sheet2->setCellValue('A3', '1. PENGARUH DIMENSI MINHASH (k) TERHADAP RECALL, LATENSI, DAN KANDIDAT (tau = 85%) [Fig. 8a]');
     $sheet2->getStyle('A3')->getFont()->setBold(true);
 
     $kHeaders = ['k (Bands)', 'Rata-rata Latensi (ms)', 'Standar Deviasi (ms)', 'Rata-rata Kandidat Server', 'Recall (%)', 'Precision (%)'];
@@ -483,7 +543,7 @@ if (!empty($sens)) {
 
     // Section 2: tau sweep
     $r += 2;
-    $sheet2->setCellValue("A{$r}", '2. PENGARUH AMBANG BATAS KESAMAAN KLIEN (tau) TERHADAP RECALL DAN PRECISION (k = 3) [Fig. 7b]');
+    $sheet2->setCellValue("A{$r}", '2. PENGARUH AMBANG BATAS KESAMAAN KLIEN (tau) TERHADAP RECALL DAN PRECISION (k = 3) [Fig. 8b]');
     $sheet2->getStyle("A{$r}")->getFont()->setBold(true);
     $r++;
 
@@ -556,7 +616,7 @@ if (!empty($sens)) {
 $sheet3 = $spreadsheet->createSheet();
 $sheet3->setTitle('Proyeksi_Skalabilitas');
 
-$sheet3->setCellValue('A1', 'TABLE 11 & FIGURE 8. ANALYTICAL SCALABILITY PROJECTION CALIBRATED ON OBSERVED ICD-10 DENSITY');
+$sheet3->setCellValue('A1', 'FIGURE 9 (SECTION 3.5). ANALYTICAL SCALABILITY PROJECTION CALIBRATED ON OBSERVED ICD-10 DENSITY');
 $sheet3->getStyle('A1')->getFont()->setBold(true)->setSize(12);
 
 $sheet3->setCellValue('A2', 'Kalibrasi Densitas Dasar (10.469 Dokumen): Exact = 10.51 baris/doc, N-Gram = 83.99 baris/doc, LSH k=3 = 31.55 baris/doc, LSH k=5 = 52.58 baris/doc (128 bytes/row)');
@@ -633,9 +693,9 @@ foreach (range('A', 'J') as $col) {
 // =============================================================================
 if (!empty($diverse)) {
     $sheet4 = $spreadsheet->createSheet();
-    $sheet4->setTitle('Diversitas_Kueri_Appendix');
+    $sheet4->setTitle('Diversitas_Kueri_Tabel9');
 
-    $sheet4->setCellValue('A1', 'TABLE 10. EVALUASI DIVERSITAS KUERI KLINIS & STRATIFIKASI LINGUISTIK/KESALAHAN (APPENDIX A)');
+    $sheet4->setCellValue('A1', 'TABLE 9 (SECTION 3.4). EVALUASI DIVERSITAS KUERI KLINIS & STRATIFIKASI LINGUISTIK/KESALAHAN');
     $sheet4->getStyle('A1')->getFont()->setBold(true)->setSize(12);
 
     $sheet4->setCellValue('A3', 'RINGKASAN STRATIFIKASI BERDASARKAN 5 DIMENSI DIVERSITAS KUERI (FORMULA NATIVE DARI DATA DI BAWAH)');
@@ -649,20 +709,29 @@ if (!empty($diverse)) {
         'E4' => 'Recall LSH (%)',
         'F4' => 'Latensi N-Gram (ms)',
         'G4' => 'Latensi LSH (ms)',
-        'H4' => 'Efisiensi Latensi LSH (%)'
+        'H4' => 'Efisiensi Latensi LSH (%)',
+        'I4' => 'SD N-Gram (ms)',
+        'J4' => 'SD LSH (ms)',
+        'K4' => 'Teks Table 9: N-Gram (Mean ± SD)',
+        'L4' => 'Teks Table 9: LSH (Mean ± SD)',
+        'M4' => 'Paired t',
+        'N4' => 'df',
     ];
     foreach ($divHeaders as $cell => $h) {
         $sheet4->setCellValue($cell, $h);
     }
-    $sheet4->getStyle('A4:H4')->applyFromArray($headerStylePrimary);
+    $sheet4->getStyle('A4:N4')->applyFromArray($headerStylePrimary);
 
     // Dynamic row formula ranges for 5 strata
     $strataRanges = [
-        'Short Terms (4-6 chars)'            => [14, 33],
-        'Medium Terms (7-10 chars)'          => [34, 53],
-        'Long Polysyllabic (>=11 chars)'     => [54, 73],
-        'Compound Typo (Edit Distance d=2)'  => [74, 93],
-        'Phonetic/Orthographic Shifts'       => [94, 113],
+        // Raw rows start at 16: 6 summary rows (5-10), note (12), title (14), header (15).
+        // Verified after generation: the loop below asserts the stratum label of each row.
+        'Short Terms (4-6 chars)'            => [16, 35],
+        'Medium Terms (7-10 chars)'          => [36, 55],
+        'Long Polysyllabic (>=11 chars)'     => [56, 75],
+        'Compound Typo (Edit Distance d=2)'  => [76, 95],
+        'Phonetic/Orthographic Shifts'       => [96, 115],
+        'Pooled (n = 100)'                   => [16, 115],
     ];
 
     $r = 5;
@@ -678,9 +747,21 @@ if (!empty($diverse)) {
         $sheet4->setCellValue("F{$r}", "=AVERAGE(J{$startRow}:J{$endRow})");
         $sheet4->setCellValue("G{$r}", "=AVERAGE(L{$startRow}:L{$endRow})");
         $sheet4->setCellValue("H{$r}", "=(F{$r}-G{$r})/F{$r}");
+        $sheet4->setCellValue("I{$r}", "=STDEV.S(J{$startRow}:J{$endRow})");
+        $sheet4->setCellValue("J{$r}", "=STDEV.S(L{$startRow}:L{$endRow})");
+        $sheet4->setCellValue("K{$r}", "=TEXT(F{$r},\"0.00\")&\" ± \"&TEXT(I{$r},\"0.0\")");
+        $sheet4->setCellValue("L{$r}", "=TEXT(G{$r},\"0.00\")&\" ± \"&TEXT(J{$r},\"0.0\")");
+        $sheet4->setCellValue("M{$r}", "=AVERAGE(N{$startRow}:N{$endRow})/(STDEV.S(N{$startRow}:N{$endRow})/SQRT(COUNT(N{$startRow}:N{$endRow})))");
+        $sheet4->setCellValue("N{$r}", "=COUNT(N{$startRow}:N{$endRow})-1");
         $r++;
     }
-    $sheet4->getStyle("A4:H" . ($r - 1))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    $sheet4->getStyle("I5:J" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
+    $sheet4->getStyle("M5:M" . ($r - 1))->getNumberFormat()->setFormatCode('0.000');
+    $sheet4->getStyle("A" . ($r - 1) . ":N" . ($r - 1))->getFont()->setBold(true);
+    $sheet4->setCellValue("A" . ($r + 1), 'Catatan: angka sesudah ± di Table 9 adalah STANDAR DEVIASI sampel (STDEV.S), berbeda dengan Table 8 yang memakai margin of error CI 95%. Paired t = rata-rata selisih kolom N / (SD selisih / √n).');
+    $sheet4->getStyle("A" . ($r + 1))->getFont()->setItalic(true);
+    $r++;
+    $sheet4->getStyle("A4:N" . ($r - 2))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
     $sheet4->getStyle("B5:E" . ($r - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     $sheet4->getStyle("C5:E" . ($r - 1))->getNumberFormat()->setFormatCode('0.0');
     $sheet4->getStyle("F5:G" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
@@ -695,12 +776,13 @@ if (!empty($diverse)) {
     $rawHeaders = [
         'A' => 'No', 'B' => 'Dimensi Diversitas', 'C' => 'Doc ID', 'D' => 'Kata Asli', 'E' => 'Kueri Typo',
         'F' => 'Panjang', 'G' => 'Diagnosis Penyakit', 'H' => 'Waktu Exact (ms)', 'I' => 'Recall Exact',
-        'J' => 'Waktu N-Gram (ms)', 'K' => 'Recall N-Gram', 'L' => 'Waktu LSH (ms)', 'M' => 'Recall LSH'
+        'J' => 'Waktu N-Gram (ms)', 'K' => 'Recall N-Gram', 'L' => 'Waktu LSH (ms)', 'M' => 'Recall LSH',
+        'N' => 'Selisih N-Gram - LSH (ms)'
     ];
     foreach ($rawHeaders as $col => $h) {
         $sheet4->setCellValue($col . $r, $h);
     }
-    $sheet4->getStyle("A{$r}:M{$r}")->applyFromArray($headerStylePrimary);
+    $sheet4->getStyle("A{$r}:N{$r}")->applyFromArray($headerStylePrimary);
     $headR = $r;
     $r++;
 
@@ -723,10 +805,23 @@ if (!empty($diverse)) {
         $sheet4->setCellValue("K{$r}", $ng['is_recalled'] ? 100 : 0);
         $sheet4->setCellValue("L{$r}", $ls['latency_total']);
         $sheet4->setCellValue("M{$r}", $ls['is_recalled'] ? 100 : 0);
+        $sheet4->setCellValue("N{$r}", "=J{$r}-L{$r}");
         $r++;
     }
 
-    $sheet4->getStyle("A{$headR}:M" . ($r - 1))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    // Guard: every raw row must sit inside the range declared for its stratum.
+    foreach ($strataRanges as $dimName => $rng) {
+        if ($dimName === 'Pooled (n = 100)') {
+            continue;
+        }
+        for ($rr = $rng[0]; $rr <= $rng[1]; $rr++) {
+            if ($sheet4->getCell("B{$rr}")->getValue() !== $dimName) {
+                throw new RuntimeException("Stratum range mismatch at row {$rr} (expected {$dimName})");
+            }
+        }
+    }
+    $sheet4->getStyle("N" . ($headR + 1) . ":N" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
+    $sheet4->getStyle("A{$headR}:N" . ($r - 1))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
     $sheet4->getStyle("A" . ($headR + 1) . ":A" . ($r - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     $sheet4->getStyle("C" . ($headR + 1) . ":C" . ($r - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     $sheet4->getStyle("F" . ($headR + 1) . ":F" . ($r - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -737,7 +832,7 @@ if (!empty($diverse)) {
     $sheet4->getStyle("J" . ($headR + 1) . ":J" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
     $sheet4->getStyle("L" . ($headR + 1) . ":L" . ($r - 1))->getNumberFormat()->setFormatCode('0.00');
 
-    foreach (range('A', 'M') as $col) {
+    foreach (range('A', 'N') as $col) {
         $sheet4->getColumnDimension($col)->setAutoSize(true);
     }
 }
@@ -748,7 +843,7 @@ if (!empty($diverse)) {
 $sheet5 = $spreadsheet->createSheet();
 $sheet5->setTitle('Master_Indeks_Overview');
 
-$sheet5->setCellValue('A1', 'TABLE 6 & FIGURE 4. MASTER INVERTED INDEX STORAGE OVERHEAD AFTER FULL ICD-10 CORPUS INGESTION');
+$sheet5->setCellValue('A1', 'TABLE 6 & FIGURE 5. MASTER INVERTED INDEX STORAGE OVERHEAD AFTER FULL ICD-10 CORPUS INGESTION');
 $sheet5->getStyle('A1')->getFont()->setBold(true)->setSize(12);
 
 $sheet5->setCellValue('A2', 'Dataset Master: 10.469 Rekam Medis ICD-10 (Enkripsi AES-256-CBC Payload, Trapdoor HMAC-SHA256, 128 Bytes/Row Storage Density)');
@@ -798,12 +893,143 @@ foreach (range('A', 'G') as $col) {
     $sheet5->getColumnDimension($col)->setAutoSize(true);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Sheet 6: one-page guide to every "±" printed in the manuscript + n = 98 sensitivity scenario
+// ---------------------------------------------------------------------------------------------
+$sheet6 = $spreadsheet->createSheet();
+$sheet6->setTitle('Panduan_Angka_PlusMinus');
+$s1 = "'Pengujian_100_Sampel'!";
+$s4 = "'Diversitas_Kueri_Tabel9'!";
+$last = $lastDataRow;
+
+$sheet6->setCellValue('A1', 'PANDUAN ANGKA "±" DI NASKAH: ARTI, RUMUS, DAN ASAL DATA');
+$sheet6->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+$sheet6->setCellValue('A2', 'Setiap baris di bawah menunjuk ke sel sumber (formula hidup). Kolom "Cocok?" membandingkan teks hasil rumus dengan teks yang tercetak di naskah.');
+
+$guideHeaders = ['Lokasi di naskah', 'Skema / strata', 'Teks di naskah', 'Teks hasil rumus', 'Cocok?', 'Arti angka sesudah ±', 'Rumus', 'Contoh hitung', 'Sel sumber'];
+foreach ($guideHeaders as $i => $h) {
+    $sheet6->setCellValue(chr(65 + $i) . '4', $h);
+}
+$sheet6->getStyle('A4:I4')->applyFromArray($headerStylePrimary);
+
+$moeDef = 'Margin of error interval kepercayaan 95% (BUKAN standar deviasi)';
+$moeFormula = 'MoE = t_crit × s / √n, t_crit = T.INV.2T(0,05; n−1) = 1,984 (df = 99)';
+$sdDef = 'Standar deviasi sampel s (BUKAN margin of error)';
+$sdFormula = 's = STDEV.S(data latensi strata)';
+
+$rowsGuide = [
+    ['Table 8 (hlm. 10)', 'Exact Match', '1.51 ± 0.07', "={$s1}G{$rowPm8}", $moeDef, $moeFormula,
+        "=\"1,984 × \"&TEXT({$s1}G{$rowStd},\"0.00\")&\" / √100 = \"&TEXT({$s1}G{$rowMargin},\"0.00\")", "{$s1}G{$rowMean} (mean), G{$rowStd} (s), G{$rowMargin} (MoE)"],
+    ['Table 8 (hlm. 10)', 'N-Gram (θ = 0.40)', '248.43 ± 13.13', "={$s1}L{$rowPm8}", $moeDef, $moeFormula,
+        "=\"1,984 × \"&TEXT({$s1}L{$rowStd},\"0.00\")&\" / √100 = \"&TEXT({$s1}L{$rowMargin},\"0.00\")", "{$s1}L{$rowMean}, L{$rowStd}, L{$rowMargin}"],
+    ['Table 8 (hlm. 10)', 'LSH (k = 3, τ = 85%)', '74.58 ± 24.82', "={$s1}Q{$rowPm8}", $moeDef, $moeFormula,
+        "=\"1,984 × \"&TEXT({$s1}Q{$rowStd},\"0.00\")&\" / √100 = \"&TEXT({$s1}Q{$rowMargin},\"0.00\")", "{$s1}Q{$rowMean}, Q{$rowStd}, Q{$rowMargin}"],
+];
+$t9 = [
+    5 => ['Short Terms (4–6)', '151.87 ± 46.2', '81.26 ± 61.6'],
+    6 => ['Medium Terms (7–10)', '197.10 ± 67.1', '81.30 ± 37.7'],
+    7 => ['Long Polysyllabic (≥ 11)', '252.58 ± 67.1', '79.43 ± 34.0'],
+    8 => ['Compound Typo (d = 2)', '182.85 ± 65.6', '73.36 ± 33.4'],
+    9 => ['Phonetic/Orthographic Shifts', '201.40 ± 71.4', '86.35 ± 39.1'],
+    10 => ['Pooled (n = 100), juga di teks hlm. 12', '197.16 ± 70.9', '80.34 ± 41.8'],
+];
+foreach ($t9 as $srcRow => [$name, $ng, $lsh]) {
+    $rowsGuide[] = ['Table 9 (hlm. 12)', "{$name}: N-Gram", $ng, "={$s4}K{$srcRow}", $sdDef, $sdFormula,
+        "=\"s = \"&TEXT({$s4}I{$srcRow},\"0.00\")", "{$s4}F{$srcRow} (mean), I{$srcRow} (s)"];
+    $rowsGuide[] = ['Table 9 (hlm. 12)', "{$name}: LSH", $lsh, "={$s4}L{$srcRow}", $sdDef, $sdFormula,
+        "=\"s = \"&TEXT({$s4}J{$srcRow},\"0.00\")", "{$s4}G{$srcRow} (mean), J{$srcRow} (s)"];
+}
+
+$r = 5;
+foreach ($rowsGuide as [$loc, $scheme, $printed, $live, $def, $formula, $example, $src]) {
+    $sheet6->setCellValue("A{$r}", $loc);
+    $sheet6->setCellValue("B{$r}", $scheme);
+    $sheet6->setCellValueExplicit("C{$r}", $printed, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+    $sheet6->setCellValue("D{$r}", $live);
+    $sheet6->setCellValue("E{$r}", "=IF(D{$r}=C{$r},\"YA\",\"TIDAK\")");
+    $sheet6->setCellValue("F{$r}", $def);
+    $sheet6->setCellValue("G{$r}", $formula);
+    $sheet6->setCellValue("H{$r}", $example);
+    $sheet6->setCellValue("I{$r}", $src);
+    $r++;
+}
+$guideEnd = $r - 1;
+$sheet6->getStyle("A4:I{$guideEnd}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+$sheet6->getStyle("A5:I{$guideEnd}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
+$sheet6->getStyle("A5:B7")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF2CC');
+$sheet6->getStyle("A8:B{$guideEnd}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E2EFDA');
+
+$r += 1;
+$sheet6->setCellValue("A{$r}", 'Catatan untuk naskah: kedua tabel memakai "±" dengan arti berbeda (Table 8 = margin of error 95%, Table 9 = standar deviasi). Sebaiknya arti "±" ditulis di caption masing-masing tabel.');
+$sheet6->getStyle("A{$r}")->getFont()->setBold(true);
+$r += 3;
+
+// --- Sensitivity: the two negative LSH latencies --------------------------------------------
+$sheet6->setCellValue("A{$r}", 'SKENARIO SENSITIVITAS: DAMPAK 2 LATENSI LSH NEGATIF (Table 7 & 8)');
+$sheet6->getStyle("A{$r}")->getFont()->setBold(true)->setSize(12);
+$r++;
+$sheet6->setCellValue("A{$r}", 'Latensi tidak mungkin < 0. Dua nilai negatif berasal dari timer microtime() (jam dinding) yang mundur saat benchmark. Data mentah TIDAK diubah; skenario B hanya menghitung ulang dengan mengecualikan pasangan kueri yang LSH-nya < 0.');
+$r += 2;
+$senHead = $r;
+foreach (['Statistik', 'A. Seperti di naskah (n = 100)', 'B. Tanpa 2 nilai negatif (n = 98)', 'Rumus skenario B'] as $i => $h) {
+    $sheet6->setCellValue(chr(65 + $i) . $r, $h);
+}
+$sheet6->getStyle("A{$r}:D{$r}")->applyFromArray($headerStylePrimary);
+$r++;
+
+$L = "{$s1}L3:L{$last}";
+$Q = "{$s1}Q3:Q{$last}";
+$V = "{$s1}V3:V{$last}";
+$ok = "({$Q}>=0)";
+$rN = $r;
+$sen = [
+    ['Jumlah pasangan kueri (n)', "={$s1}Q{$rowN}", "=COUNTIF({$Q},\">=0\")", 'COUNTIF(LSH ≥ 0)'],
+    ['Jumlah latensi LSH negatif', "={$s1}Q{$rowNeg}", '=0', 'dikecualikan'],
+    ['Mean LSH (ms)', "={$s1}Q{$rowMean}", "=AVERAGEIF({$Q},\">=0\")", 'AVERAGEIF(LSH ≥ 0)'],
+    ['SD LSH (ms)', "={$s1}Q{$rowStd}", "=SQRT(SUMPRODUCT({$ok}*({$Q}-C" . ($rN + 2) . ")^2)/(C{$rN}-1))", 'SD sampel hanya baris LSH ≥ 0'],
+    ['t_crit (α = 0.05, df = n − 1)', "=T.INV.2T(0.05,B{$rN}-1)", "=T.INV.2T(0.05,C{$rN}-1)", 'T.INV.2T(0,05; n−1)'],
+    ['Margin of error LSH (± Table 8)', "={$s1}Q{$rowMargin}", "=C" . ($rN + 4) . "*C" . ($rN + 3) . "/SQRT(C{$rN})", 't_crit × s / √n'],
+    ['Teks "Mean ± MoE" LSH', "={$s1}Q{$rowPm8}", "=TEXT(C" . ($rN + 2) . ",\"0.00\")&\" ± \"&TEXT(C" . ($rN + 5) . ",\"0.00\")", ''],
+    ['Mean N-Gram pada pasangan yang sama (ms)', "={$s1}L{$rowMean}", "=AVERAGEIFS({$L},{$Q},\">=0\")", 'AVERAGEIFS(N-Gram; LSH ≥ 0)'],
+    ['Penurunan latensi LSH vs N-Gram', "=1-B" . ($rN + 2) . "/B" . ($rN + 7), "=1-C" . ($rN + 2) . "/C" . ($rN + 7), '1 − mean LSH / mean N-Gram'],
+    ['Mean selisih berpasangan D̄ (ms)', "=AVERAGE({$V})", "=AVERAGEIFS({$V},{$Q},\">=0\")", 'selisih N-Gram − LSH'],
+    ['SD selisih (ms)', "=STDEV.S({$V})", "=SQRT(SUMPRODUCT({$ok}*({$V}-C" . ($rN + 9) . ")^2)/(C{$rN}-1))", ''],
+    ['Paired t', "={$s1}L{$rowTstat}", "=C" . ($rN + 9) . "/(C" . ($rN + 10) . "/SQRT(C{$rN}))", 'D̄ / (SD selisih / √n)'],
+    ['p-value (dua arah)', "=T.DIST.2T(B" . ($rN + 11) . ",B{$rN}-1)", "=T.DIST.2T(C" . ($rN + 11) . ",C{$rN}-1)", 'T.DIST.2T(t; n−1)'],
+];
+foreach ($sen as [$label, $a, $b, $note]) {
+    $sheet6->setCellValue("A{$r}", $label);
+    $sheet6->setCellValue("B{$r}", $a);
+    $sheet6->setCellValue("C{$r}", $b);
+    $sheet6->setCellValue("D{$r}", $note);
+    $r++;
+}
+$senEnd = $r - 1;
+$sheet6->getStyle("A{$senHead}:D{$senEnd}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+$sheet6->getStyle("B" . ($rN + 2) . ":C" . ($rN + 5))->getNumberFormat()->setFormatCode('0.00');
+$sheet6->getStyle("B" . ($rN + 4) . ":C" . ($rN + 4))->getNumberFormat()->setFormatCode('0.000');
+$sheet6->getStyle("B" . ($rN + 7) . ":C" . ($rN + 7))->getNumberFormat()->setFormatCode('0.00');
+$sheet6->getStyle("B" . ($rN + 8) . ":C" . ($rN + 8))->getNumberFormat()->setFormatCode('0.0%');
+$sheet6->getStyle("B" . ($rN + 9) . ":C" . ($rN + 11))->getNumberFormat()->setFormatCode('0.000');
+$sheet6->getStyle("B" . ($rN + 12) . ":C" . ($rN + 12))->getNumberFormat()->setFormatCode('0.00E+00');
+$r++;
+$sheet6->setCellValue("A{$r}", 'Kesimpulan statistik (LSH signifikan lebih cepat, p < 0,001) sama di kedua skenario; yang berubah adalah besarnya angka (mean, ±, persentase penurunan).');
+
+$sheet6->getColumnDimension('A')->setWidth(34);
+$sheet6->getColumnDimension('B')->setWidth(30);
+$sheet6->getColumnDimension('C')->setWidth(30);
+$sheet6->getColumnDimension('D')->setWidth(30);
+$sheet6->getColumnDimension('E')->setWidth(9);
+$sheet6->getColumnDimension('F')->setWidth(34);
+$sheet6->getColumnDimension('G')->setWidth(40);
+$sheet6->getColumnDimension('H')->setWidth(30);
+$sheet6->getColumnDimension('I')->setWidth(42);
+
 // Reset active sheet to sheet 1
 $spreadsheet->setActiveSheetIndex(0);
 
 // Save to destination files
 $destinations = [
-    __DIR__ . '/../../Hasil_Pengujian_SE_Cloud.xlsx',
     __DIR__ . '/../Hasil_Pengujian_SE_Cloud.xlsx',
 ];
 

@@ -5,10 +5,24 @@ Paper: Fuzzy Searchable Encryption for Cloud Medical Records: N-Gram vs. Localit
 Generates Figures 4, 5, 6, 7, and 8 at 300 DPI with explicitly labeled X and Y axes.
 """
 
+import argparse
+import inspect
 import json
 import os
+
+import matplotlib
+matplotlib.use('Agg')  # headless backend: works without a display (servers, WSL, CI)
 import matplotlib.pyplot as plt
 import numpy as np
+
+parser = argparse.ArgumentParser(description='Regenerate the manuscript figures from data/*.json')
+parser.add_argument('--out', default=None,
+                    help='Output directory (default: <repo>/figures). Pass ../04_LaTeX/figures explicitly if wanted.')
+args = parser.parse_args()
+
+# Fixed seed: the paired-trajectory panel samples 40 of the 100 queries; without a seed
+# every run produced a different figure.
+rng = np.random.default_rng(42)
 
 # Set publication style
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -28,23 +42,26 @@ plt.rcParams.update({
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-OUT_DIRS = [
-    os.path.join(os.path.dirname(BASE_DIR), 'latex', 'figures'),
-    os.path.join(BASE_DIR, 'figures')
-]
+# Only write inside the repository unless the user asks otherwise (the previous version
+# silently created/overwrote ../latex/figures outside the repository).
+OUT_DIRS = [os.path.abspath(args.out) if args.out else os.path.join(BASE_DIR, 'figures')]
 
 for d in OUT_DIRS:
     os.makedirs(d, exist_ok=True)
 
+
+def load_json(name):
+    with open(os.path.join(DATA_DIR, name), encoding='utf-8') as f:
+        return json.load(f)
+
+
 # Load Benchmark Datasets
-with open(os.path.join(DATA_DIR, 'benchmark_100_queries.json')) as f:
-    b100 = json.load(f)
+b100 = load_json('benchmark_100_queries.json')
+sens = load_json('sensitivity_analysis.json')
+scale = load_json('scalability_projection.json')
 
-with open(os.path.join(DATA_DIR, 'sensitivity_analysis.json')) as f:
-    sens = json.load(f)
-
-with open(os.path.join(DATA_DIR, 'scalability_projection.json')) as f:
-    scale = json.load(f)
+# Matplotlib renamed boxplot(labels=) to tick_labels= in 3.9 and removed `labels` in 3.11.
+BOXPLOT_LABEL_KW = 'tick_labels' if 'tick_labels' in inspect.signature(plt.Axes.boxplot).parameters else 'labels'
 
 def save_fig(fig, filename):
     for d in OUT_DIRS:
@@ -91,7 +108,7 @@ raw_lsh   = b100['raw_data']['lsh']['latency']
 # Subplot 1: Boxplot with Mean marker and CI
 box_data = [raw_exact, raw_lsh, raw_ngram]
 labels = ['Exact Match\n(Baseline)', 'LSH MinHash\n(k = 3)', 'N-Gram\n(Bi-gram)']
-bp = ax1.boxplot(box_data, labels=labels, patch_artist=True, widths=0.45,
+bp = ax1.boxplot(box_data, **{BOXPLOT_LABEL_KW: labels}, patch_artist=True, widths=0.45,
                  showmeans=True, meanprops={"marker":"s", "markerfacecolor":"red", "markeredgecolor":"black", "markersize":7})
 
 box_colors = ['#D1E8E2', '#A9DFBF', '#FADBD8']
@@ -118,7 +135,7 @@ ax1.set_title('(a) Latency Distribution (n = 100 Queries)', pad=12)
 ax1.set_ylim(-10, 480)
 
 # Subplot 2: Paired comparison
-indices = np.random.choice(len(raw_lsh), 40, replace=False) # Plot 40 sample query trajectories for visual clarity
+indices = rng.choice(len(raw_lsh), 40, replace=False)  # 40 sample query trajectories for visual clarity
 for i in indices:
     ax2.plot([1, 2], [raw_ngram[i], raw_lsh[i]], color='#95A5A6', alpha=0.4, linewidth=1)
 
@@ -213,7 +230,7 @@ tau_recalls = [sens['tau_sweep'][str(t)]['classification']['recall'] for t in ta
 tau_precs = [sens['tau_sweep'][str(t)]['classification']['precision'] for t in tau_vals]
 
 ax2.plot(tau_vals, tau_recalls, color='#27AE60', marker='D', linewidth=2.5, markersize=7, label='Recall (%)')
-ax2.plot(tau_vals, [p * 100 for p in tau_precs], color='#8E44AD', marker='^', linewidth=2.5, markersize=7, linestyle='--', label='Precision (×10⁻² %)')
+ax2.plot(tau_vals, [p * 100 for p in tau_precs], color='#8E44AD', marker='^', linewidth=2.5, markersize=7, linestyle='--', label=r'Precision ($\times10^{-2}$ %)')
 
 # Mark recommended threshold tau = 85%
 ax2.axvline(x=85, color='#C0392B', linestyle=':', linewidth=2, label='Recommended τ = 85%')

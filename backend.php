@@ -100,19 +100,19 @@ if ($search_query !== '') {
     // -------------------------------------------------------------
     // A. EXACT MATCH SEARCH (Baseline)
     // -------------------------------------------------------------
-    $tStart = microtime(true);
+    $tStart = (hrtime(true) / 1e9);
     $trapdoorExact = HmacTrapdoor::generate($search_query, $secretKey);
     $stmtExact = $pdo->prepare("SELECT DISTINCT doc_id FROM exact_index WHERE trapdoor = ?");
     $stmtExact->execute([$trapdoorExact]);
     $exactRaw = $stmtExact->fetchAll(PDO::FETCH_COLUMN);
 
     $results['exact'] = process_client_filtering($pdo, $exactRaw, $search_query, $secretKey, $stats['exact']);
-    $stats['exact']['time'] = round((microtime(true) - $tStart) * 1000, 2);
+    $stats['exact']['time'] = round(((hrtime(true) / 1e9) - $tStart) * 1000, 2);
 
     // -------------------------------------------------------------
     // B. N-GRAM (BI-GRAM) FUZZY SEARCH
     // -------------------------------------------------------------
-    $tStart = microtime(true);
+    $tStart = (hrtime(true) / 1e9);
     $queryBigrams = NgramTokenizer::extractBigrams($search_query);
     $trapdoorsNgram = array_map(fn($bg) => HmacTrapdoor::generate($bg, $secretKey), $queryBigrams);
 
@@ -130,12 +130,12 @@ if ($search_query !== '') {
     }
 
     $results['ngram'] = process_client_filtering($pdo, $ngramRaw, $search_query, $secretKey, $stats['ngram']);
-    $stats['ngram']['time'] = round((microtime(true) - $tStart) * 1000, 2);
+    $stats['ngram']['time'] = round(((hrtime(true) / 1e9) - $tStart) * 1000, 2);
 
     // -------------------------------------------------------------
     // C. LSH (MINHASH) FUZZY SEARCH (k = 3)
     // -------------------------------------------------------------
-    $tStart = microtime(true);
+    $tStart = (hrtime(true) / 1e9);
     $bandTokens = MinHashEngine::getBandTokens($search_query, 3);
     $trapdoorsLsh = array_map(fn($token) => HmacTrapdoor::generate($token, $secretKey), $bandTokens);
 
@@ -148,5 +148,5 @@ if ($search_query !== '') {
     }
 
     $results['lsh'] = process_client_filtering($pdo, $lshRaw, $search_query, $secretKey, $stats['lsh']);
-    $stats['lsh']['time'] = round((microtime(true) - $tStart) * 1000, 2);
+    $stats['lsh']['time'] = round(((hrtime(true) / 1e9) - $tStart) * 1000, 2);
 }

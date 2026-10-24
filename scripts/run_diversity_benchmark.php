@@ -17,16 +17,38 @@ use Fkse\Benchmark\SensitivityBenchmark;
 ini_set('memory_limit', '1024M');
 set_time_limit(0);
 
+// Usage:
+//   php scripts/run_diversity_benchmark.php                      new query set, writes to data/
+//   php scripts/run_diversity_benchmark.php --queries=data/diversity_benchmark.json --out=data/rerun_X
+//       reuses the published 100 stratified queries and writes the results to another folder.
+$opts = getopt('', ['queries:', 'out:']);
+$root = dirname(__DIR__);
+$resolve = static fn (string $p): string =>
+    (str_starts_with($p, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $p) === 1) ? $p : $root . '/' . $p;
+
 echo "===============================================================\n";
 echo "      FKSE EXTENDED QUERY DIVERSITY BENCHMARK EVALUATION       \n";
 echo "===============================================================\n";
 
-$dataDir = __DIR__ . '/../data';
+$dataDir = isset($opts['out']) ? $resolve((string) $opts['out']) : $root . '/data';
+if (!is_dir($dataDir)) {
+    mkdir($dataDir, 0777, true);
+}
+echo "Timer: hrtime() (monotonic). Output folder: {$dataDir}\n";
 $benchmark = new SensitivityBenchmark();
 
-echo "[1/2] Generating stratified diverse clinical query set (n = 100)...\n";
-$diverseCases = $benchmark->generateDiverseQuerySet();
-echo "Generated " . count($diverseCases) . " diverse queries across 5 strata:\n";
+if (isset($opts['queries'])) {
+    $src = $resolve((string) $opts['queries']);
+    $prev = json_decode((string) file_get_contents($src), true, 512, JSON_THROW_ON_ERROR);
+    $diverseCases = isset($prev['detailed_results'])
+        ? array_map(static fn (array $r): array => $r['case'], $prev['detailed_results'])
+        : $prev;
+    echo "[1/2] Reusing " . count($diverseCases) . " stratified queries from {$src}\n";
+} else {
+    echo "[1/2] Generating stratified diverse clinical query set (n = 100)...\n";
+    $diverseCases = $benchmark->generateDiverseQuerySet();
+}
+echo "Query set: " . count($diverseCases) . " diverse queries across 5 strata:\n";
 
 $counts = [];
 foreach ($diverseCases as $c) {
@@ -38,9 +60,9 @@ foreach ($counts as $dim => $cnt) {
 }
 
 echo "\n[2/2] Executing diverse evaluation across Exact, N-Gram, and LSH...\n";
-$tStart = microtime(true);
+$tStart = hrtime(true);
 $results = $benchmark->executeExtendedDiversityEvaluation($diverseCases);
-$elapsed = round(microtime(true) - $tStart, 2);
+$elapsed = round((hrtime(true) - $tStart) / 1e9, 2);
 echo "Completed in {$elapsed} seconds.\n\n";
 
 echo "--- STRATIFIED EVALUATION SUMMARY BY DIVERSITY DIMENSION ---\n";
